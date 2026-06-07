@@ -75,7 +75,7 @@ p {
   width: 18px;
   height: 18px;
   margin-top: 2px;
-  accent-color: #4b67ff;
+  accent-color: #ffd544;
 }
 
 .toggle span {
@@ -105,8 +105,8 @@ input {
 }
 
 input:focus {
-  border-color: #4b67ff;
-  outline: 3px solid rgba(75, 103, 255, 0.16);
+  border-color: #ffd544;
+  outline: 3px solid rgba(255, 213, 68, 0.24);
 }
 
 .actions {
@@ -128,9 +128,14 @@ button {
 }
 
 #save {
-  border-color: #4b67ff;
-  background: #4b67ff;
-  color: #ffffff;
+  border-color: #ffd544;
+  background: #ffd544;
+  color: #111111;
+}
+
+#save:hover {
+  border-color: #f2c52f;
+  background: #f2c52f;
 }
 
 .status {
