@@ -1,0 +1,4 @@
+[submodule "upstream/mlx-audio"]
+	path = upstream/mlx-audio
+	url = https://github.com/kanihal/mlx-audio.git
+	branch = nuvoread-server-support

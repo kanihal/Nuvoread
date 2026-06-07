@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Nuvoread Options</title>
+    <link rel="stylesheet" href="options.css" />
+  </head>
+  <body>
+    <main class="page">
+      <section class="panel">
+        <div class="brand">
+          <img src="icons/nuvoread.svg" alt="" width="44" height="44" />
+          <div>
+            <h1>Nuvoread</h1>
+            <p>Local text-to-speech reader settings</p>
+          </div>
+        </div>
+
+        <img
+          class="hero"
+          src="images/nuvoread-options-hero.svg"
+          alt="Nuvoread reader preview"
+          width="720"
+          height="260"
+        />
+
+        <label class="field">
+          <span>Server URL</span>
+          <input
+            id="server-url"
+            type="url"
+            placeholder="http://127.0.0.1:9876"
+            autocomplete="off"
+            spellcheck="false"
+          />
+        </label>
+
+        <div class="actions">
+          <button id="save" type="button">Save</button>
+          <button id="reset" type="button">Reset</button>
+        </div>
+
+        <p id="status" class="status" role="status"></p>
+      </section>
+    </main>
+    <script src="options.js"></script>
+  </body>
+</html>
