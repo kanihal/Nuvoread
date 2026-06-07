@@ -5,6 +5,8 @@ LABEL="com.nuvoread.mlx-audio-server"
 HOST="127.0.0.1"
 PORT="9876"
 IDLE_UNLOAD_SECONDS="1800"
+DEFAULT_TTS_MODEL="${NUVOREAD_TTS_MODEL:-mlx-community/Kokoro-82M-bf16}"
+DEFAULT_TTS_VOICE="${NUVOREAD_TTS_VOICE:-af_heart}"
 
 SCRIPT_PATH="${0:a}"
 SCRIPT_NAME="${SCRIPT_PATH:t}"
@@ -279,6 +281,40 @@ install_python_deps() {
   [[ -x "${VENV_DIR}/bin/mlx_audio.server" ]] || die "Install finished but ${VENV_DIR}/bin/mlx_audio.server is missing."
 }
 
+download_default_model() {
+  info "Downloading default TTS model: ${DEFAULT_TTS_MODEL}"
+  "${PYTHON_BIN}" - "${DEFAULT_TTS_MODEL}" "${DEFAULT_TTS_VOICE}" <<'PY'
+import sys
+from huggingface_hub import snapshot_download
+
+model = sys.argv[1]
+voice = sys.argv[2]
+
+allow_patterns = [
+    "*.json",
+    "model*.safetensors",
+    "weights*.safetensors",
+    "*.py",
+    "*.model",
+    "*.tiktoken",
+    "*.txt",
+    "*.jinja",
+    "*.jsonl",
+    "*.yaml",
+    "*.npz",
+    "*.pth",
+]
+
+if voice:
+    allow_patterns.append(f"voices/{voice}.safetensors")
+
+snapshot_path = snapshot_download(repo_id=model, allow_patterns=allow_patterns)
+print(f"Downloaded {model} to {snapshot_path}")
+if voice:
+    print(f"Downloaded voice preset: {voice}")
+PY
+}
+
 install_launch_agent() {
   mkdir -p "${LAUNCH_AGENTS_DIR}" "${LOG_DIR}"
 
@@ -365,6 +401,7 @@ HELP
       require_macos
       require_python
       install_python_deps
+      download_default_model
       install_launch_agent
       verify_server
       print_summary
