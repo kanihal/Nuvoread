@@ -12,6 +12,7 @@ PROJECT_DIR="${SCRIPT_PATH:h}"
 VENV_DIR="${PROJECT_DIR}/.venv"
 UPSTREAM_DIR="${PROJECT_DIR}/upstream/mlx-audio"
 PYTHON_BIN="${VENV_DIR}/bin/python"
+PYTHON_CMD=""
 LAUNCH_AGENTS_DIR="${HOME}/Library/LaunchAgents"
 LOG_DIR="${HOME}/Library/Logs/Nuvoread"
 PLIST_PATH="${LAUNCH_AGENTS_DIR}/${LABEL}.plist"
@@ -99,13 +100,60 @@ require_macos() {
   [[ "$(uname -s)" == "Darwin" ]] || die "This installer uses macOS LaunchAgents and must be run on macOS."
 }
 
-require_python() {
-  command -v python3 >/dev/null 2>&1 || die "python3 is required. Install Python 3.10 or newer, then rerun this script."
-  python3 - <<'PY'
+python_is_supported() {
+  "$1" - <<'PY' >/dev/null 2>&1
 import sys
-if sys.version_info < (3, 10):
-    raise SystemExit("Python 3.10 or newer is required.")
+raise SystemExit(0 if sys.version_info >= (3, 10) else 1)
 PY
+}
+
+find_python() {
+  local -a candidates=(
+    "${PYTHON:-}"
+    python3.14
+    python3.13
+    python3.12
+    python3.11
+    python3.10
+    python3
+    /opt/homebrew/bin/python3
+    /opt/homebrew/bin/python3.14
+    /opt/homebrew/bin/python3.13
+    /opt/homebrew/bin/python3.12
+    /opt/homebrew/bin/python3.11
+    /opt/homebrew/bin/python3.10
+    /usr/local/bin/python3
+    /usr/local/bin/python3.14
+    /usr/local/bin/python3.13
+    /usr/local/bin/python3.12
+    /usr/local/bin/python3.11
+    /usr/local/bin/python3.10
+  )
+
+  local candidate resolved
+  for candidate in "${candidates[@]}"; do
+    [[ -n "${candidate}" ]] || continue
+
+    if [[ "${candidate}" == */* ]]; then
+      [[ -x "${candidate}" ]] || continue
+      resolved="${candidate}"
+    else
+      resolved="$(command -v "${candidate}" 2>/dev/null || true)"
+      [[ -n "${resolved}" ]] || continue
+    fi
+
+    if python_is_supported "${resolved}"; then
+      printf "%s" "${resolved}"
+      return 0
+    fi
+  done
+
+  return 1
+}
+
+require_python() {
+  PYTHON_CMD="$(find_python)" || die "Python 3.10 or newer is required. Install it with Homebrew or python.org, then rerun this script."
+  info "Using Python: $("${PYTHON_CMD}" -c 'import sys; print(f"{sys.executable} ({sys.version.split()[0]})")')"
 }
 
 install_python_deps() {
@@ -113,9 +161,10 @@ install_python_deps() {
 
   if [[ ! -x "${PYTHON_BIN}" ]]; then
     info "Creating virtual environment at ${VENV_DIR}"
-    python3 -m venv "${VENV_DIR}"
+    "${PYTHON_CMD}" -m venv "${VENV_DIR}"
   else
     info "Using existing virtual environment at ${VENV_DIR}"
+    python_is_supported "${PYTHON_BIN}" || die "Existing virtual environment uses an unsupported Python. Remove ${VENV_DIR}, then rerun this script."
   fi
 
   info "Upgrading pip"
