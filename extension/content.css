@@ -149,7 +149,8 @@
 
 #mlx-tts-reader .mlx-tts-speed:hover,
 #mlx-tts-reader .mlx-tts-speed[data-active="true"] {
-  background: #4b67ff;
+  background: #ffd544;
+  color: #111111;
 }
 
 #mlx-tts-reader .mlx-tts-custom-speed {
@@ -174,13 +175,13 @@
 #mlx-tts-reader .mlx-tts-custom-speed button {
   height: 30px;
   border-radius: 7px;
-  background: #4b67ff;
-  color: #ffffff;
+  background: #ffd544;
+  color: #111111;
   font-weight: 700;
 }
 
 #mlx-tts-reader .mlx-tts-custom-speed button:hover {
-  background: #3957f4;
+  background: #f2c52f;
 }
 
 ::highlight(mlx-tts-sentence) {
