@@ -291,7 +291,7 @@ install_python_deps() {
   "${PYTHON_BIN}" -m pip install --editable "${UPSTREAM_DIR}[server,tts]"
 
   info "Installing Kokoro text processing dependencies"
-  "${PYTHON_BIN}" -m pip install "misaki[ja,zh]" "num2words>=0.5.14"
+  "${PYTHON_BIN}" -m pip install "misaki[en]"
 
   [[ -x "${VENV_DIR}/bin/mlx_audio.server" ]] || die "Install finished but ${VENV_DIR}/bin/mlx_audio.server is missing."
 }
@@ -302,8 +302,16 @@ verify_kokoro_deps() {
   "${PYTHON_BIN}" - <<'PY'
 import importlib
 
-for module_name in ("num2words", "misaki.en", "misaki.espeak"):
+for module_name in ("num2words", "spacy", "phonemizer", "misaki.en", "misaki.espeak"):
     importlib.import_module(module_name)
+
+from misaki import en, espeak
+
+fallback = espeak.EspeakFallback(british=False)
+g2p = en.G2P(trf=False, british=False, fallback=fallback, unk="")
+phonemes, tokens = g2p("Nuvoread install test.")
+if not phonemes or not tokens:
+    raise SystemExit("Kokoro English G2P verification produced no phonemes.")
 PY
 }
 
