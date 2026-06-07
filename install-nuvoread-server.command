@@ -37,6 +37,7 @@ LOG_DIR="${HOME}/Library/Logs/Nuvoread"
 PLIST_PATH="${LAUNCH_AGENTS_DIR}/${LABEL}.plist"
 OUT_LOG="${LOG_DIR}/mlx-audio-server.out.log"
 ERR_LOG="${LOG_DIR}/mlx-audio-server.err.log"
+TTS_SMOKE_AUDIO="${LOG_DIR}/tts-smoke-test.wav"
 GUI_DOMAIN="gui/$(id -u)"
 SERVER_URL="http://${HOST}:${PORT}"
 
@@ -290,7 +291,7 @@ install_python_deps() {
   "${PYTHON_BIN}" -m pip install --editable "${UPSTREAM_DIR}[server,tts]"
 
   info "Installing Kokoro text processing dependencies"
-  "${PYTHON_BIN}" -m pip install "misaki[ja,zh]"
+  "${PYTHON_BIN}" -m pip install "misaki[ja,zh]" "num2words>=0.5.14"
 
   [[ -x "${VENV_DIR}/bin/mlx_audio.server" ]] || die "Install finished but ${VENV_DIR}/bin/mlx_audio.server is missing."
 }
@@ -301,7 +302,7 @@ verify_kokoro_deps() {
   "${PYTHON_BIN}" - <<'PY'
 import importlib
 
-for module_name in ("misaki.en", "misaki.espeak", "misaki.ja", "misaki.zh"):
+for module_name in ("num2words", "misaki.en", "misaki.espeak"):
     importlib.import_module(module_name)
 PY
 }
@@ -385,6 +386,69 @@ verify_server() {
   return 1
 }
 
+verify_tts_generation() {
+  info "Generating TTS smoke-test audio"
+  mkdir -p "${LOG_DIR}"
+
+  local headers_path payload
+  headers_path="$(mktemp "${TMPDIR:-/tmp}/nuvoread-tts-headers.XXXXXX")"
+  payload="$("${PYTHON_BIN}" - "${DEFAULT_TTS_MODEL}" "${DEFAULT_TTS_VOICE}" <<'PY'
+import json
+import sys
+
+print(
+    json.dumps(
+        {
+            "model": sys.argv[1],
+            "input": "Nuvoread install test.",
+            "voice": sys.argv[2],
+            "response_format": "wav",
+            "speed": 1.0,
+            "stream": False,
+        }
+    )
+)
+PY
+)"
+
+  if ! curl -fsS \
+    --max-time 120 \
+    -D "${headers_path}" \
+    -H "Content-Type: application/json" \
+    -X POST "${SERVER_URL}/v1/audio/speech" \
+    -d "${payload}" \
+    --output "${TTS_SMOKE_AUDIO}"; then
+    rm -f "${headers_path}"
+    die "TTS smoke test failed. Check logs: ${OUT_LOG} and ${ERR_LOG}"
+  fi
+
+  if ! grep -qi "^Content-Type: audio/wav" "${headers_path}"; then
+    rm -f "${headers_path}"
+    die "TTS smoke test returned an unexpected content type. Output: ${TTS_SMOKE_AUDIO}"
+  fi
+
+  rm -f "${headers_path}"
+
+  "${PYTHON_BIN}" - "${TTS_SMOKE_AUDIO}" <<'PY'
+import sys
+import wave
+from pathlib import Path
+
+audio_path = Path(sys.argv[1])
+if audio_path.stat().st_size <= 44:
+    raise SystemExit(f"Generated audio is too small: {audio_path}")
+
+with wave.open(str(audio_path), "rb") as wav:
+    frames = wav.getnframes()
+    sample_rate = wav.getframerate()
+
+if frames <= 0 or sample_rate <= 0:
+    raise SystemExit(f"Generated audio is invalid: {audio_path}")
+PY
+
+  info "TTS smoke-test audio generated: ${TTS_SMOKE_AUDIO}"
+}
+
 print_summary() {
   cat <<SUMMARY
 
@@ -399,6 +463,9 @@ LaunchAgent:
 Logs:
   ${OUT_LOG}
   ${ERR_LOG}
+
+TTS smoke-test audio:
+  ${TTS_SMOKE_AUDIO}
 
 Useful commands:
   launchctl print ${GUI_DOMAIN}/${LABEL}
@@ -431,6 +498,7 @@ HELP
       download_default_model
       install_launch_agent
       verify_server
+      verify_tts_generation
       print_summary
       ;;
     *)
