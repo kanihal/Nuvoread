@@ -13,6 +13,7 @@ VENV_DIR="${PROJECT_DIR}/.venv"
 UPSTREAM_DIR="${PROJECT_DIR}/upstream/mlx-audio"
 PYTHON_BIN="${VENV_DIR}/bin/python"
 PYTHON_CMD=""
+BREW_CMD=""
 LAUNCH_AGENTS_DIR="${HOME}/Library/LaunchAgents"
 LOG_DIR="${HOME}/Library/Logs/Nuvoread"
 PLIST_PATH="${LAUNCH_AGENTS_DIR}/${LABEL}.plist"
@@ -100,6 +101,60 @@ require_macos() {
   [[ "$(uname -s)" == "Darwin" ]] || die "This installer uses macOS LaunchAgents and must be run on macOS."
 }
 
+find_brew() {
+  local -a candidates=(
+    brew
+    /opt/homebrew/bin/brew
+    /usr/local/bin/brew
+  )
+
+  local candidate resolved
+  for candidate in "${candidates[@]}"; do
+    if [[ "${candidate}" == */* ]]; then
+      [[ -x "${candidate}" ]] || continue
+      resolved="${candidate}"
+    else
+      resolved="$(command -v "${candidate}" 2>/dev/null || true)"
+      [[ -n "${resolved}" ]] || continue
+    fi
+
+    printf "%s" "${resolved}"
+    return 0
+  done
+
+  return 1
+}
+
+load_brew_shellenv() {
+  [[ -n "${BREW_CMD}" ]] || return 0
+  eval "$("${BREW_CMD}" shellenv)"
+}
+
+install_homebrew() {
+  BREW_CMD="$(find_brew)" && {
+    load_brew_shellenv
+    info "Using Homebrew: ${BREW_CMD}"
+    return 0
+  }
+
+  command -v curl >/dev/null 2>&1 || die "curl is required to install Homebrew."
+  command -v /bin/bash >/dev/null 2>&1 || die "/bin/bash is required to install Homebrew."
+
+  info "Installing Homebrew"
+  /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+  BREW_CMD="$(find_brew)" || die "Homebrew install finished, but brew was not found."
+  load_brew_shellenv
+  info "Using Homebrew: ${BREW_CMD}"
+}
+
+install_python_with_brew() {
+  install_homebrew
+
+  info "Installing Python with Homebrew"
+  "${BREW_CMD}" install python
+}
+
 python_is_supported() {
   "$1" - <<'PY' >/dev/null 2>&1
 import sys
@@ -152,7 +207,12 @@ find_python() {
 }
 
 require_python() {
-  PYTHON_CMD="$(find_python)" || die "Python 3.10 or newer is required. Install it with Homebrew or python.org, then rerun this script."
+  if ! PYTHON_CMD="$(find_python)"; then
+    info "Python 3.10 or newer was not found."
+    install_python_with_brew
+    PYTHON_CMD="$(find_python)" || die "Homebrew Python install finished, but Python 3.10 or newer was not found."
+  fi
+
   info "Using Python: $("${PYTHON_CMD}" -c 'import sys; print(f"{sys.executable} ({sys.version.split()[0]})")')"
 }
 
