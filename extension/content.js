@@ -9,8 +9,6 @@
   const VOICE = "af_heart";
   const SPEEDS = [1, 1.25, 1.5, 1.75, 2];
   const DEFAULT_SPEED = 1.25;
-  const SILENT_AUDIO_DATA_URL =
-    "data:audio/wav;base64,UklGRsQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YaAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
   const SENTENCE_SCROLL_TOP_OFFSET = 80;
   const SPEED_STORAGE_KEY = "mlxTtsSpeed";
   const SERVER_STORAGE_KEY = "mlxTtsServerBaseUrl";
@@ -252,10 +250,8 @@
     serverBaseUrl: DEFAULT_SERVER_BASE_URL,
     sentences: [],
     index: 0,
-    audio: null,
-    currentUrl: null,
-    controller: null,
-    prefetch: null,
+    playback: null,
+    playbackRequestId: 0,
     stopped: true,
     paused: false,
     playing: false,
@@ -273,6 +269,7 @@
   window.addEventListener("pagehide", () => clearAllHighlights());
   loadSettings();
   chrome?.storage?.onChanged?.addListener(handleStorageChange);
+  chrome?.runtime?.onMessage?.addListener(handleRuntimeMessage);
   setStatus("Idle");
   updateButtons();
 
@@ -406,7 +403,7 @@
     const action = button.dataset.action;
     if (action === "play") {
       if (state.stopped) {
-        void playFromSelection({ primePlayback: true });
+        void playFromSelection();
       } else {
         togglePause();
       }
@@ -437,11 +434,6 @@
     elements.customSpeed.value = formatSpeed(state.speed);
     if (persist) {
       chrome?.storage?.local?.set({ [SPEED_STORAGE_KEY]: state.speed });
-    }
-    if (state.prefetch && state.prefetch.speed !== state.speed) {
-      state.prefetch.controller.abort();
-      state.prefetch.promise.catch(() => {});
-      state.prefetch = null;
     }
   }
 
@@ -534,7 +526,7 @@
     return `${normalizeServerBaseUrl(state.serverBaseUrl)}/v1/audio/speech`;
   }
 
-  async function playFromSelection(options = {}) {
+  async function playFromSelection() {
     const sentences = buildSentenceQueueFromSelection();
     if (!sentences.length) {
       setStatus("Select a word first");
@@ -542,9 +534,6 @@
     }
 
     stopPlayback("Loading");
-    if (options.primePlayback) {
-      primeAudioPlayback();
-    }
     state.sentences = sentences;
     state.index = 0;
     state.stopped = false;
@@ -560,14 +549,7 @@
     while (!state.stopped && state.index < state.sentences.length) {
       try {
         setCurrentSentence("Loading", state.sentences[state.index]);
-        const blob = await getCurrentAudioBlob();
-        if (state.stopped) {
-          break;
-        }
-
-        prefetchNext();
-        await playBlob(blob, state.sentences[state.index]);
-        revokeCurrentUrl();
+        await playSpeech(state.sentences[state.index]);
         state.index += 1;
       } catch (error) {
         if (state.stopped || error.name === "AbortError") {
@@ -586,152 +568,94 @@
     }
   }
 
-  async function getCurrentAudioBlob() {
-    if (
-      state.prefetch &&
-      state.prefetch.index === state.index &&
-      state.prefetch.speed === state.speed
-    ) {
-      const prefetch = state.prefetch;
-      state.prefetch = null;
-      return prefetch.promise;
-    }
-    return fetchSpeechBlob(state.sentences[state.index].text, state.speed);
-  }
-
-  function prefetchNext() {
-    const nextIndex = state.index + 1;
-    if (nextIndex >= state.sentences.length || state.prefetch?.index === nextIndex) {
-      return;
-    }
-
-    const request = createSpeechRequest(state.sentences[nextIndex].text, state.speed);
-    request.promise.catch(() => {});
-    state.prefetch = {
-      index: nextIndex,
-      speed: state.speed,
-      ...request,
-    };
-  }
-
-  function createSpeechRequest(text, speed) {
-    const controller = new AbortController();
-    state.controller = controller;
-
-    const promise = fetch(getSpeechEndpoint(), {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      signal: controller.signal,
-      body: JSON.stringify({
-        model: MODEL,
-        input: text,
-        voice: VOICE,
-        response_format: "mp3",
-        speed,
-        stream: true,
-        streaming_interval: 0.5,
-      }),
-    }).then(async (response) => {
-      if (!response.ok) {
-        const error = new Error(`TTS failed: ${response.status}`);
-        error.phase = "request";
-        error.status = response.status;
-        throw error;
-      }
-
-      const blob = await response.blob();
-      if (!blob.size) {
-        const error = new Error("TTS returned empty audio");
-        error.phase = "request";
-        throw error;
-      }
-      return blob;
-    }).catch((error) => {
-      if (error.name !== "AbortError" && !error.phase) {
-        error.phase = "request";
-      }
-      throw error;
-    });
-
-    return { controller, promise };
-  }
-
-  function fetchSpeechBlob(text, speed) {
-    return createSpeechRequest(text, speed).promise;
-  }
-
-  function playBlob(blob, sentence) {
+  function playSpeech(sentence) {
     return new Promise((resolve, reject) => {
-      revokeCurrentUrl();
-      clearPlaybackTimer();
-
-      const url = URL.createObjectURL(blob);
-      const audio = getAudioElement();
-
-      state.currentUrl = url;
-      state.audio = audio;
-      state.paused = false;
-      state.activeWordIndex = -1;
-
-      audio.pause();
-      audio.onloadedmetadata = () => {
-        highlightSentence(sentence);
-        updateWordHighlight(sentence, audio);
-        startHighlightLoop(sentence, audio);
+      const requestId = `${Date.now()}-${state.playbackRequestId += 1}`;
+      state.playback = {
+        requestId,
+        sentence,
+        resolve,
+        reject,
+        currentTime: 0,
+        duration: Number.NaN,
       };
-      audio.ontimeupdate = () => updateWordHighlight(sentence, audio);
-      audio.onended = () => {
-        clearPlaybackTimer();
-        resolve();
-      };
-      audio.onerror = () => {
-        const error = new Error("Audio playback failed");
-        error.phase = "playback";
-        reject(error);
-      };
-      audio.src = url;
-      audio.load();
 
-      setCurrentSentence("Playing", sentence);
-      updateButtons();
-      audio.play().catch((error) => {
-        error.phase = "playback";
-        reject(error);
+      chrome.runtime.sendMessage({
+        type: "NUVOREAD_PLAY",
+        requestId,
+        endpoint: getSpeechEndpoint(),
+        payload: {
+          model: MODEL,
+          input: sentence.text,
+          voice: VOICE,
+          response_format: "mp3",
+          speed: state.speed,
+          stream: true,
+          streaming_interval: 0.5,
+        },
+      }, (response) => {
+        if (chrome.runtime.lastError) {
+          const error = new Error(chrome.runtime.lastError.message);
+          error.phase = "request";
+          if (state.playback?.requestId === requestId) {
+            state.playback = null;
+          }
+          reject(error);
+          return;
+        }
+        if (!response?.ok) {
+          const error = new Error(response?.error || "Audio playback could not start");
+          error.phase = response?.phase || "playback";
+          if (state.playback?.requestId === requestId) {
+            state.playback = null;
+          }
+          reject(error);
+        }
       });
     });
   }
 
-  function getAudioElement() {
-    if (!state.audio) {
-      state.audio = new Audio();
-      state.audio.preload = "auto";
-    }
-    return state.audio;
-  }
-
-  function primeAudioPlayback() {
-    const audio = getAudioElement();
-    audio.onloadedmetadata = null;
-    audio.ontimeupdate = null;
-    audio.onended = null;
-    audio.onerror = null;
-    audio.src = SILENT_AUDIO_DATA_URL;
-    audio.load();
-    const primedSrc = audio.src;
-    const playPromise = audio.play();
-    if (!playPromise) {
+  function handleRuntimeMessage(message) {
+    if (message?.type !== "NUVOREAD_AUDIO_EVENT") {
       return;
     }
-    playPromise
-      .then(() => {
-        if (audio.src === primedSrc) {
-          audio.pause();
-          audio.currentTime = 0;
-        }
-      })
-      .catch(() => {});
+
+    const playback = state.playback;
+    if (!playback || message.requestId !== playback.requestId) {
+      return;
+    }
+
+    if (message.event === "loadedmetadata") {
+      playback.duration = message.duration;
+      playback.currentTime = 0;
+      highlightSentence(playback.sentence);
+      updateWordHighlight(playback.sentence, playback);
+      setCurrentSentence("Playing", playback.sentence);
+      updateButtons();
+      return;
+    }
+
+    if (message.event === "timeupdate") {
+      playback.currentTime = message.currentTime;
+      playback.duration = message.duration;
+      updateWordHighlight(playback.sentence, playback);
+      return;
+    }
+
+    if (message.event === "ended") {
+      clearPlaybackTimer();
+      state.playback = null;
+      playback.resolve();
+      return;
+    }
+
+    if (message.event === "error") {
+      const error = new Error(message.error || "Audio playback failed");
+      error.phase = message.phase || "playback";
+      error.status = message.status;
+      state.playback = null;
+      playback.reject(error);
+    }
   }
 
   function getPlaybackErrorStatus(error) {
@@ -744,32 +668,32 @@
     return "Server unavailable";
   }
 
+  function sendPlaybackCommand(type, requestId = state.playback?.requestId) {
+    if (!requestId || !chrome?.runtime?.sendMessage) {
+      return;
+    }
+    chrome.runtime.sendMessage({ type, requestId }, () => {
+      void chrome.runtime.lastError;
+    });
+  }
+
   function togglePause() {
-    if (!state.audio || state.stopped) {
+    const playback = state.playback;
+    if (!playback || state.stopped) {
       return;
     }
 
-    if (state.audio.paused) {
-      state.audio.play().catch((error) => {
-        error.phase = "playback";
-        console.error("MLX TTS resume failed", error);
-        setStatus(getPlaybackErrorStatus(error));
-        state.paused = true;
-        updateButtons();
-      });
+    if (state.paused) {
+      sendPlaybackCommand("NUVOREAD_RESUME", playback.requestId);
       state.paused = false;
       state.playing = true;
-      const sentence = state.sentences[state.index];
-      if (sentence) {
-        startHighlightLoop(sentence, state.audio);
-      }
-      setCurrentSentence("Playing", sentence);
+      setCurrentSentence("Playing", playback.sentence);
     } else {
-      state.audio.pause();
+      sendPlaybackCommand("NUVOREAD_PAUSE", playback.requestId);
       state.paused = true;
       state.playing = true;
       clearPlaybackTimer();
-      setCurrentSentence("Paused", state.sentences[state.index]);
+      setCurrentSentence("Paused", playback.sentence);
     }
     updateButtons();
   }
@@ -782,35 +706,19 @@
     state.index = 0;
     state.activeWordIndex = -1;
 
-    if (state.controller) {
-      state.controller.abort();
-      state.controller = null;
+    if (state.playback) {
+      const playback = state.playback;
+      sendPlaybackCommand("NUVOREAD_STOP", playback.requestId);
+      state.playback = null;
+      const error = new DOMException("Playback stopped", "AbortError");
+      playback.reject(error);
     }
-    if (state.prefetch) {
-      state.prefetch.controller.abort();
-      state.prefetch.promise.catch(() => {});
-      state.prefetch = null;
-    }
-    if (state.audio) {
-      state.audio.pause();
-      state.audio.removeAttribute("src");
-      state.audio.load();
-      state.audio = null;
-    }
-    revokeCurrentUrl();
     clearPlaybackTimer();
     clearAllHighlights();
     setSpeedPopover(false);
 
     setStatus(status);
     updateButtons();
-  }
-
-  function revokeCurrentUrl() {
-    if (state.currentUrl) {
-      URL.revokeObjectURL(state.currentUrl);
-      state.currentUrl = null;
-    }
   }
 
   function updateButtons() {
@@ -1139,21 +1047,6 @@
     }
 
     return true;
-  }
-
-  function startHighlightLoop(sentence, audio) {
-    clearPlaybackTimer();
-
-    const tick = () => {
-      if (state.stopped || state.paused || audio.paused || audio.ended) {
-        state.highlightFrame = null;
-        return;
-      }
-      updateWordHighlight(sentence, audio);
-      state.highlightFrame = requestAnimationFrame(tick);
-    };
-
-    state.highlightFrame = requestAnimationFrame(tick);
   }
 
   function clearPlaybackTimer() {
