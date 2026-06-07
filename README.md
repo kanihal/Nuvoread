@@ -5,7 +5,7 @@ Nuvoread is a local browser reader extension backed by an MLX Audio text-to-spee
 ## Prerequisites
 
 - macOS on an Apple Silicon Mac.
-- Homebrew and Python 3.10 or newer. The installer will install them automatically if needed.
+- Homebrew and Python 3.10-3.13. The installer will install Python 3.13 automatically if needed.
 - Google Chrome, Microsoft Edge, or another Chromium browser for the unpacked extension.
 - Internet access for Homebrew, Python dependencies, and model downloads.
 
