@@ -232,8 +232,35 @@ require_python() {
   info "Using Python: $("${PYTHON_CMD}" -c 'import sys; print(f"{sys.executable} ({sys.version.split()[0]})")')"
 }
 
+ensure_upstream_source() {
+  [[ -f "${UPSTREAM_DIR}/pyproject.toml" ]] && return 0
+
+  command -v git >/dev/null 2>&1 || die "Missing ${UPSTREAM_DIR}/pyproject.toml, and git is required to fetch upstream/mlx-audio."
+
+  info "Fetching upstream/mlx-audio"
+  if [[ -d "${PROJECT_DIR}/.git" || -f "${PROJECT_DIR}/.git" ]]; then
+    git -C "${PROJECT_DIR}" submodule update --init --recursive upstream/mlx-audio || true
+    [[ -f "${UPSTREAM_DIR}/pyproject.toml" ]] && return 0
+  fi
+
+  local repo_url branch existing_file
+  repo_url="$(git -C "${PROJECT_DIR}" config -f .gitmodules --get submodule.upstream/mlx-audio.url 2>/dev/null || true)"
+  branch="$(git -C "${PROJECT_DIR}" config -f .gitmodules --get submodule.upstream/mlx-audio.branch 2>/dev/null || true)"
+  repo_url="${repo_url:-https://github.com/kanihal/mlx-audio.git}"
+  branch="${branch:-nuvoread-server-support}"
+
+  mkdir -p "${PROJECT_DIR}/upstream"
+  existing_file="$(find "${UPSTREAM_DIR}" -mindepth 1 -maxdepth 1 -print -quit 2>/dev/null || true)"
+  if [[ -n "${existing_file}" ]]; then
+    die "Missing ${UPSTREAM_DIR}/pyproject.toml, and ${UPSTREAM_DIR} is not empty. Remove or fix that directory, then rerun this script."
+  fi
+
+  git clone --branch "${branch}" "${repo_url}" "${UPSTREAM_DIR}"
+  [[ -f "${UPSTREAM_DIR}/pyproject.toml" ]] || die "Fetched ${UPSTREAM_DIR}, but pyproject.toml is still missing."
+}
+
 install_python_deps() {
-  [[ -f "${UPSTREAM_DIR}/pyproject.toml" ]] || die "Missing ${UPSTREAM_DIR}/pyproject.toml. Run this script from the Nuvoread project root or set NUVOREAD_PROJECT_DIR to the project directory."
+  ensure_upstream_source
 
   if [[ ! -x "${PYTHON_BIN}" ]]; then
     info "Creating virtual environment at ${VENV_DIR}"
