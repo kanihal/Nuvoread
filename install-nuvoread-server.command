@@ -5,6 +5,7 @@ LABEL="com.nuvoread.mlx-audio-server"
 HOST="127.0.0.1"
 PORT="9876"
 IDLE_UNLOAD_SECONDS="1800"
+SERVICE_PATH="/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/local/sbin:/usr/bin:/bin:/usr/sbin:/sbin"
 DEFAULT_TTS_MODEL="${NUVOREAD_TTS_MODEL:-mlx-community/Kokoro-82M-bf16}"
 DEFAULT_TTS_VOICE="${NUVOREAD_TTS_VOICE:-af_heart}"
 
@@ -87,6 +88,12 @@ print_plist() {
   <key>RunAtLoad</key>
   <true/>
 
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>${SERVICE_PATH}</string>
+  </dict>
+
   <key>KeepAlive</key>
   <dict>
     <key>SuccessfulExit</key>
@@ -105,6 +112,7 @@ PLIST
 
 serve() {
   cd "${PROJECT_DIR}"
+  export PATH="${SERVICE_PATH}"
 
   if [[ ! -x "${PYTHON_BIN}" ]]; then
     die "Missing ${PYTHON_BIN}. Run ${SCRIPT_PATH} first to install the server."
@@ -184,6 +192,17 @@ install_kokoro_system_deps() {
   install_homebrew
   info "Installing espeak-ng with Homebrew"
   "${BREW_CMD}" install espeak-ng
+}
+
+install_ffmpeg_system_deps() {
+  if command -v ffmpeg >/dev/null 2>&1; then
+    info "Using ffmpeg: $(command -v ffmpeg)"
+    return 0
+  fi
+
+  install_homebrew
+  info "Installing ffmpeg with Homebrew"
+  "${BREW_CMD}" install ffmpeg
 }
 
 python_is_supported() {
@@ -323,6 +342,11 @@ phonemes, tokens = g2p("Nuvoread install test.")
 if not phonemes or not tokens:
     raise SystemExit("Kokoro English G2P verification produced no phonemes.")
 PY
+}
+
+verify_ffmpeg_deps() {
+  info "Verifying ffmpeg"
+  PATH="${SERVICE_PATH}" command -v ffmpeg >/dev/null 2>&1 || die "ffmpeg is missing after installation."
 }
 
 download_default_model() {
@@ -511,8 +535,10 @@ HELP
       require_macos
       require_python
       install_kokoro_system_deps
+      install_ffmpeg_system_deps
       install_python_deps
       verify_kokoro_deps
+      verify_ffmpeg_deps
       download_default_model
       install_launch_agent
       verify_server
