@@ -6,9 +6,25 @@ HOST="127.0.0.1"
 PORT="9876"
 IDLE_UNLOAD_SECONDS="1800"
 
-SCRIPT_PATH="${0:A}"
+SCRIPT_PATH="${0:a}"
 SCRIPT_NAME="${SCRIPT_PATH:t}"
-PROJECT_DIR="${SCRIPT_PATH:h}"
+
+resolve_project_dir() {
+  local candidate
+  for candidate in "${NUVOREAD_PROJECT_DIR:-}" "${SCRIPT_PATH:h}" "${PWD:-}"; do
+    [[ -n "${candidate}" ]] || continue
+    candidate="${candidate:a}"
+    if [[ -f "${candidate}/upstream/mlx-audio/pyproject.toml" ]]; then
+      printf "%s" "${candidate}"
+      return 0
+    fi
+  done
+
+  printf "%s" "${SCRIPT_PATH:h}"
+  return 0
+}
+
+PROJECT_DIR="$(resolve_project_dir)"
 VENV_DIR="${PROJECT_DIR}/.venv"
 UPSTREAM_DIR="${PROJECT_DIR}/upstream/mlx-audio"
 PYTHON_BIN="${VENV_DIR}/bin/python"
@@ -217,7 +233,7 @@ require_python() {
 }
 
 install_python_deps() {
-  [[ -f "${UPSTREAM_DIR}/pyproject.toml" ]] || die "Missing ${UPSTREAM_DIR}/pyproject.toml."
+  [[ -f "${UPSTREAM_DIR}/pyproject.toml" ]] || die "Missing ${UPSTREAM_DIR}/pyproject.toml. Run this script from the Nuvoread project root or set NUVOREAD_PROJECT_DIR to the project directory."
 
   if [[ ! -x "${PYTHON_BIN}" ]]; then
     info "Creating virtual environment at ${VENV_DIR}"
