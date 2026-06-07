@@ -173,6 +173,17 @@ install_python_with_brew() {
   "${BREW_CMD}" install python
 }
 
+install_kokoro_system_deps() {
+  if command -v espeak-ng >/dev/null 2>&1; then
+    info "Using espeak-ng: $(command -v espeak-ng)"
+    return 0
+  fi
+
+  install_homebrew
+  info "Installing espeak-ng with Homebrew"
+  "${BREW_CMD}" install espeak-ng
+}
+
 python_is_supported() {
   "$1" - <<'PY' >/dev/null 2>&1
 import sys
@@ -278,7 +289,21 @@ install_python_deps() {
   info "Installing local mlx-audio server and TTS dependencies"
   "${PYTHON_BIN}" -m pip install --editable "${UPSTREAM_DIR}[server,tts]"
 
+  info "Installing Kokoro text processing dependencies"
+  "${PYTHON_BIN}" -m pip install "misaki[ja,zh]"
+
   [[ -x "${VENV_DIR}/bin/mlx_audio.server" ]] || die "Install finished but ${VENV_DIR}/bin/mlx_audio.server is missing."
+}
+
+verify_kokoro_deps() {
+  info "Verifying Kokoro text processing dependencies"
+  command -v espeak-ng >/dev/null 2>&1 || die "espeak-ng is missing after installation."
+  "${PYTHON_BIN}" - <<'PY'
+import importlib
+
+for module_name in ("misaki.en", "misaki.espeak", "misaki.ja", "misaki.zh"):
+    importlib.import_module(module_name)
+PY
 }
 
 download_default_model() {
@@ -400,7 +425,9 @@ HELP
     "")
       require_macos
       require_python
+      install_kokoro_system_deps
       install_python_deps
+      verify_kokoro_deps
       download_default_model
       install_launch_agent
       verify_server

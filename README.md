@@ -18,7 +18,7 @@ chmod +x ./install-nuvoread-server.command
 ./install-nuvoread-server.command
 ```
 
-The installer creates or reuses `.venv`, installs the local `upstream/mlx-audio` package with server and TTS dependencies, downloads the default Kokoro TTS model and voice preset, writes a LaunchAgent to `~/Library/LaunchAgents/com.nuvoread.mlx-audio-server.plist`, starts it immediately, and configures it to start at login.
+The installer creates or reuses `.venv`, installs the local `upstream/mlx-audio` package with server and TTS dependencies, installs Kokoro text-processing dependencies (`espeak-ng` and `misaki`), downloads the default Kokoro TTS model and voice preset, writes a LaunchAgent to `~/Library/LaunchAgents/com.nuvoread.mlx-audio-server.plist`, starts it immediately, and configures it to start at login.
 
 The server listens at:
 
