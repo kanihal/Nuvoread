@@ -9,6 +9,7 @@
   const VOICE = "af_heart";
   const SPEEDS = [1, 1.25, 1.5, 1.75, 2];
   const DEFAULT_SPEED = 1.25;
+  const SENTENCE_SCROLL_TOP_OFFSET = 80;
   const SPEED_STORAGE_KEY = "mlxTtsSpeed";
   const SERVER_STORAGE_KEY = "mlxTtsServerBaseUrl";
   const WORD_HIGHLIGHT_STORAGE_KEY = "mlxTtsWordHighlightEnabled";
@@ -891,7 +892,9 @@
       return;
     }
 
-    const container = range.startContainer.parentElement;
-    container?.scrollIntoView({ block: "start", inline: "nearest", behavior: "smooth" });
+    window.scrollBy({
+      top: rect.top - SENTENCE_SCROLL_TOP_OFFSET,
+      behavior: "smooth",
+    });
   }
 })();
