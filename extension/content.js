@@ -9,10 +9,227 @@
   const VOICE = "af_heart";
   const SPEEDS = [1, 1.25, 1.5, 1.75, 2];
   const DEFAULT_SPEED = 1.25;
+  const SILENT_AUDIO_DATA_URL =
+    "data:audio/wav;base64,UklGRsQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YaAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
   const SENTENCE_SCROLL_TOP_OFFSET = 80;
   const SPEED_STORAGE_KEY = "mlxTtsSpeed";
   const SERVER_STORAGE_KEY = "mlxTtsServerBaseUrl";
   const WORD_HIGHLIGHT_STORAGE_KEY = "mlxTtsWordHighlightEnabled";
+  const PLAYER_STYLES = `
+    :host {
+      all: initial;
+      position: fixed;
+      right: 18px;
+      top: 50%;
+      z-index: 2147483647;
+      transform: translateY(-50%);
+      color: #f7f8fb;
+      font: 12px/1.35 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      letter-spacing: 0;
+    }
+
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+    }
+
+    button,
+    input {
+      margin: 0;
+      font: inherit;
+      letter-spacing: 0;
+    }
+
+    button {
+      appearance: none;
+      border: 0;
+      cursor: pointer;
+    }
+
+    button:disabled {
+      cursor: not-allowed;
+      opacity: 0.42;
+    }
+
+    [hidden] {
+      display: none !important;
+    }
+
+    .mlx-tts-pill {
+      position: relative;
+      display: flex;
+      width: 52px;
+      min-height: 134px;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 7px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 28px;
+      background: #181a20;
+      box-shadow: 0 14px 34px rgba(0, 0, 0, 0.32);
+    }
+
+    .mlx-tts-status {
+      display: block;
+      width: 100%;
+      overflow: hidden;
+      color: #d6d9e2;
+      font-size: 10px;
+      font-weight: 650;
+      line-height: 1.35;
+      text-align: center;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .mlx-tts-primary {
+      display: grid;
+      width: 34px;
+      height: 34px;
+      place-items: center;
+      border-radius: 50%;
+      background: #ffd544;
+      color: #111111;
+      font-size: 16px;
+      line-height: 1;
+      box-shadow: 0 7px 18px rgba(255, 213, 68, 0.36);
+    }
+
+    .mlx-tts-play-icon,
+    .mlx-tts-pause-icon {
+      grid-area: 1 / 1;
+    }
+
+    .mlx-tts-play-icon {
+      width: 0;
+      height: 0;
+      margin-left: 3px;
+      border-top: 8px solid transparent;
+      border-bottom: 8px solid transparent;
+      border-left: 12px solid currentColor;
+    }
+
+    .mlx-tts-pause-icon {
+      display: none;
+      width: 13px;
+      height: 15px;
+      border-right: 4px solid currentColor;
+      border-left: 4px solid currentColor;
+    }
+
+    .mlx-tts-primary[data-mode="pause"] .mlx-tts-play-icon {
+      display: none;
+    }
+
+    .mlx-tts-primary[data-mode="pause"] .mlx-tts-pause-icon {
+      display: block;
+    }
+
+    .mlx-tts-primary:hover {
+      background: #f2c52f;
+    }
+
+    .mlx-tts-speed-chip {
+      min-width: 34px;
+      max-width: 42px;
+      overflow: hidden;
+      padding: 3px 0;
+      border-radius: 11px;
+      background: transparent;
+      color: #ffffff;
+      font-size: 11px;
+      font-weight: 700;
+      line-height: 1.35;
+      text-align: center;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .mlx-tts-speed-chip:hover,
+    .mlx-tts-speed-chip[data-active="true"] {
+      background: rgba(255, 255, 255, 0.12);
+    }
+
+    .mlx-tts-speed-popover {
+      position: absolute;
+      right: 62px;
+      bottom: 0;
+      width: 226px;
+      padding: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 12px;
+      background: #181a20;
+      box-shadow: 0 16px 38px rgba(0, 0, 0, 0.32);
+    }
+
+    .mlx-tts-speed-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 6px;
+    }
+
+    .mlx-tts-speed {
+      height: 28px;
+      border-radius: 7px;
+      background: rgba(255, 255, 255, 0.08);
+      color: #f7f8fb;
+      line-height: 1.35;
+    }
+
+    .mlx-tts-speed:hover,
+    .mlx-tts-speed[data-active="true"] {
+      background: #ffd544;
+      color: #111111;
+    }
+
+    .mlx-tts-custom-speed {
+      display: grid;
+      grid-template-columns: 1fr 68px 44px;
+      align-items: center;
+      gap: 8px;
+      margin-top: 9px;
+      color: #c9ceda;
+      line-height: 1.35;
+    }
+
+    .mlx-tts-custom-speed input {
+      width: 68px;
+      height: 30px;
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      border-radius: 7px;
+      background: rgba(255, 255, 255, 0.08);
+      color: #ffffff;
+      line-height: 1.35;
+      text-align: center;
+    }
+
+    .mlx-tts-custom-speed button {
+      height: 30px;
+      border-radius: 7px;
+      background: #ffd544;
+      color: #111111;
+      font-weight: 700;
+      line-height: 1.35;
+    }
+
+    .mlx-tts-custom-speed button:hover {
+      background: #f2c52f;
+    }
+
+    @media (max-width: 520px) {
+      :host {
+        right: 10px;
+      }
+
+      .mlx-tts-speed-popover {
+        right: 0;
+        bottom: auto;
+        top: calc(100% + 10px);
+      }
+    }
+  `;
   const HEADING_TAGS = new Set(["H1", "H2", "H3", "H4", "H5", "H6"]);
   const SECTIONING_TAGS = new Set(["SECTION", "ARTICLE", "ASIDE", "NAV", "MAIN"]);
   const SKIP_TAGS = new Set([
@@ -67,9 +284,32 @@
 
     const root = document.createElement("div");
     root.id = ROOT_ID;
-    root.setAttribute("role", "group");
-    root.setAttribute("aria-label", "Local MLX text to speech reader");
-    root.innerHTML = `
+    root.style.setProperty("all", "initial", "important");
+    root.style.setProperty("display", "block", "important");
+    root.style.setProperty("position", "fixed", "important");
+    root.style.setProperty("right", "18px", "important");
+    root.style.setProperty("top", "50%", "important");
+    root.style.setProperty("bottom", "auto", "important");
+    root.style.setProperty("left", "auto", "important");
+    root.style.setProperty("width", "max-content", "important");
+    root.style.setProperty("height", "max-content", "important");
+    root.style.setProperty("margin", "0", "important");
+    root.style.setProperty("padding", "0", "important");
+    root.style.setProperty("border", "0", "important");
+    root.style.setProperty("background", "transparent", "important");
+    root.style.setProperty("color", "#f7f8fb", "important");
+    root.style.setProperty(
+      "font",
+      '12px/1.35 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+      "important"
+    );
+    root.style.setProperty("letter-spacing", "0", "important");
+    root.style.setProperty("z-index", "2147483647", "important");
+    root.style.setProperty("transform", "translateY(-50%)", "important");
+
+    const shadowRoot = root.attachShadow({ mode: "open" });
+    shadowRoot.innerHTML = `
+      <style>${PLAYER_STYLES}</style>
       <div class="mlx-tts-pill">
         <span class="mlx-tts-status" data-role="status" title="Idle">Idle</span>
         <button type="button" class="mlx-tts-primary" data-action="play" title="Play" aria-label="Play">
@@ -91,22 +331,26 @@
     `;
 
     document.documentElement.appendChild(root);
-    root.addEventListener("mousedown", (event) => {
+    const pill = shadowRoot.querySelector(".mlx-tts-pill");
+    pill.setAttribute("role", "group");
+    pill.setAttribute("aria-label", "Local MLX text to speech reader");
+
+    shadowRoot.addEventListener("mousedown", (event) => {
       if (!event.target.closest("input")) {
         event.preventDefault();
       }
     });
-    root.addEventListener("click", handlePlayerClick);
-    root.querySelector('[data-role="custom-speed"]').addEventListener("keydown", handleCustomSpeedKey);
+    shadowRoot.addEventListener("click", handlePlayerClick);
+    shadowRoot.querySelector('[data-role="custom-speed"]').addEventListener("keydown", handleCustomSpeedKey);
 
     return {
       root,
-      play: root.querySelector('[data-action="play"]'),
-      status: root.querySelector('[data-role="status"]'),
-      speedChip: root.querySelector('[data-action="speed-menu"]'),
-      speedPopover: root.querySelector('[data-role="speed-popover"]'),
-      customSpeed: root.querySelector('[data-role="custom-speed"]'),
-      speedButtons: Array.from(root.querySelectorAll("[data-speed]")),
+      play: shadowRoot.querySelector('[data-action="play"]'),
+      status: shadowRoot.querySelector('[data-role="status"]'),
+      speedChip: shadowRoot.querySelector('[data-action="speed-menu"]'),
+      speedPopover: shadowRoot.querySelector('[data-role="speed-popover"]'),
+      customSpeed: shadowRoot.querySelector('[data-role="custom-speed"]'),
+      speedButtons: Array.from(shadowRoot.querySelectorAll("[data-speed]")),
     };
   }
 
@@ -155,14 +399,14 @@
 
   function handlePlayerClick(event) {
     const button = event.target.closest("button");
-    if (!button || !elements.root.contains(button)) {
+    if (!button) {
       return;
     }
 
     const action = button.dataset.action;
     if (action === "play") {
       if (state.stopped) {
-        void playFromSelection();
+        void playFromSelection({ primePlayback: true });
       } else {
         togglePause();
       }
@@ -290,7 +534,7 @@
     return `${normalizeServerBaseUrl(state.serverBaseUrl)}/v1/audio/speech`;
   }
 
-  async function playFromSelection() {
+  async function playFromSelection(options = {}) {
     const sentences = buildSentenceQueueFromSelection();
     if (!sentences.length) {
       setStatus("Select a word first");
@@ -298,6 +542,9 @@
     }
 
     stopPlayback("Loading");
+    if (options.primePlayback) {
+      primeAudioPlayback();
+    }
     state.sentences = sentences;
     state.index = 0;
     state.stopped = false;
@@ -327,7 +574,7 @@
           break;
         }
         console.error("MLX TTS playback failed", error);
-        setStatus("Server unavailable");
+        setStatus(getPlaybackErrorStatus(error));
         state.playing = false;
         updateButtons();
         return;
@@ -388,14 +635,24 @@
       }),
     }).then(async (response) => {
       if (!response.ok) {
-        throw new Error(`TTS failed: ${response.status}`);
+        const error = new Error(`TTS failed: ${response.status}`);
+        error.phase = "request";
+        error.status = response.status;
+        throw error;
       }
 
       const blob = await response.blob();
       if (!blob.size) {
-        throw new Error("TTS returned empty audio");
+        const error = new Error("TTS returned empty audio");
+        error.phase = "request";
+        throw error;
       }
       return blob;
+    }).catch((error) => {
+      if (error.name !== "AbortError" && !error.phase) {
+        error.phase = "request";
+      }
+      throw error;
     });
 
     return { controller, promise };
@@ -411,31 +668,80 @@
       clearPlaybackTimer();
 
       const url = URL.createObjectURL(blob);
-      const audio = new Audio(url);
+      const audio = getAudioElement();
 
       state.currentUrl = url;
       state.audio = audio;
       state.paused = false;
       state.activeWordIndex = -1;
 
-      audio.addEventListener("loadedmetadata", () => {
+      audio.pause();
+      audio.onloadedmetadata = () => {
         highlightSentence(sentence);
         updateWordHighlight(sentence, audio);
         startHighlightLoop(sentence, audio);
-      }, { once: true });
-      audio.addEventListener("timeupdate", () => updateWordHighlight(sentence, audio));
-      audio.addEventListener("ended", () => {
+      };
+      audio.ontimeupdate = () => updateWordHighlight(sentence, audio);
+      audio.onended = () => {
         clearPlaybackTimer();
         resolve();
-      }, { once: true });
-      audio.addEventListener("error", () => reject(new Error("Audio playback failed")), {
-        once: true,
-      });
+      };
+      audio.onerror = () => {
+        const error = new Error("Audio playback failed");
+        error.phase = "playback";
+        reject(error);
+      };
+      audio.src = url;
+      audio.load();
 
       setCurrentSentence("Playing", sentence);
       updateButtons();
-      audio.play().catch(reject);
+      audio.play().catch((error) => {
+        error.phase = "playback";
+        reject(error);
+      });
     });
+  }
+
+  function getAudioElement() {
+    if (!state.audio) {
+      state.audio = new Audio();
+      state.audio.preload = "auto";
+    }
+    return state.audio;
+  }
+
+  function primeAudioPlayback() {
+    const audio = getAudioElement();
+    audio.onloadedmetadata = null;
+    audio.ontimeupdate = null;
+    audio.onended = null;
+    audio.onerror = null;
+    audio.src = SILENT_AUDIO_DATA_URL;
+    audio.load();
+    const primedSrc = audio.src;
+    const playPromise = audio.play();
+    if (!playPromise) {
+      return;
+    }
+    playPromise
+      .then(() => {
+        if (audio.src === primedSrc) {
+          audio.pause();
+          audio.currentTime = 0;
+        }
+      })
+      .catch(() => {});
+  }
+
+  function getPlaybackErrorStatus(error) {
+    if (error.phase === "playback") {
+      return error.name === "NotAllowedError" ? "Playback blocked" : "Playback failed";
+    }
+    if (error.status) {
+      return `Server error ${error.status}`;
+    }
+    return "Server unavailable";
   }
 
   function togglePause() {
@@ -444,7 +750,13 @@
     }
 
     if (state.audio.paused) {
-      state.audio.play();
+      state.audio.play().catch((error) => {
+        error.phase = "playback";
+        console.error("MLX TTS resume failed", error);
+        setStatus(getPlaybackErrorStatus(error));
+        state.paused = true;
+        updateButtons();
+      });
       state.paused = false;
       state.playing = true;
       const sentence = state.sentences[state.index];
