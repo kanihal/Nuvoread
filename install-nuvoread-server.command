@@ -178,9 +178,9 @@ install_homebrew() {
 install_python_with_brew() {
   install_homebrew
 
-  info "Installing Python 3.13 with Homebrew"
-  "${BREW_CMD}" install python@3.13
-  "${BREW_CMD}" link --overwrite python@3.13 >/dev/null 2>&1 || true
+  info "Installing Python 3.12 with Homebrew"
+  "${BREW_CMD}" install python@3.12
+  "${BREW_CMD}" link --overwrite python@3.12 >/dev/null 2>&1 || true
 }
 
 install_kokoro_system_deps() {
@@ -208,35 +208,18 @@ install_ffmpeg_system_deps() {
 python_is_supported() {
   "$1" - <<'PY' >/dev/null 2>&1
 import sys
-raise SystemExit(0 if (3, 10) <= sys.version_info[:2] <= (3, 13) else 1)
+raise SystemExit(0 if sys.version_info[:2] == (3, 12) else 1)
 PY
 }
 
 find_python() {
   local -a candidates=(
     "${PYTHON:-}"
-    python3.13
     python3.12
-    python3.11
-    python3.10
-    /opt/homebrew/bin/python3
-    /opt/homebrew/bin/python3.13
     /opt/homebrew/bin/python3.12
-    /opt/homebrew/bin/python3.11
-    /opt/homebrew/bin/python3.10
-    /opt/homebrew/opt/python@3.13/bin/python3.13
     /opt/homebrew/opt/python@3.12/bin/python3.12
-    /opt/homebrew/opt/python@3.11/bin/python3.11
-    /opt/homebrew/opt/python@3.10/bin/python3.10
-    /usr/local/bin/python3
-    /usr/local/bin/python3.13
     /usr/local/bin/python3.12
-    /usr/local/bin/python3.11
-    /usr/local/bin/python3.10
-    /usr/local/opt/python@3.13/bin/python3.13
     /usr/local/opt/python@3.12/bin/python3.12
-    /usr/local/opt/python@3.11/bin/python3.11
-    /usr/local/opt/python@3.10/bin/python3.10
   )
 
   local candidate resolved
@@ -262,9 +245,9 @@ find_python() {
 
 require_python() {
   if ! PYTHON_CMD="$(find_python)"; then
-    info "Python 3.10-3.13 was not found."
+    info "Python 3.12 was not found."
     install_python_with_brew
-    PYTHON_CMD="$(find_python)" || die "Homebrew Python install finished, but Python 3.10-3.13 was not found."
+    PYTHON_CMD="$(find_python)" || die "Homebrew Python install finished, but Python 3.12 was not found."
   fi
 
   info "Using Python: $("${PYTHON_CMD}" -c 'import sys; print(f"{sys.executable} ({sys.version.split()[0]})")')"
