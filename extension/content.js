@@ -13,6 +13,8 @@
   const SPEED_STORAGE_KEY = "mlxTtsSpeed";
   const SERVER_STORAGE_KEY = "mlxTtsServerBaseUrl";
   const WORD_HIGHLIGHT_STORAGE_KEY = "mlxTtsWordHighlightEnabled";
+  const HEADING_TAGS = new Set(["H1", "H2", "H3", "H4", "H5", "H6"]);
+  const SECTIONING_TAGS = new Set(["SECTION", "ARTICLE", "ASIDE", "NAV", "MAIN"]);
   const SKIP_TAGS = new Set([
     "SCRIPT",
     "STYLE",
@@ -543,8 +545,65 @@
       return [];
     }
 
-    const linear = buildLinearText(textNodes.slice(startIndex), start);
-    return buildSentenceObjects(linear.text, linear.refs);
+    return buildReadingUnits(textNodes.slice(startIndex), start).flatMap((unit) =>
+      buildSentenceObjects(unit.text, unit.refs)
+    );
+  }
+
+  function buildReadingUnits(textNodes, start) {
+    const groupedNodes = [];
+    let currentGroup = null;
+
+    textNodes.forEach((node) => {
+      const raw = node.nodeValue || "";
+      const from = node === start.node ? start.offset : 0;
+      if (from >= raw.length || !raw.slice(from).trim()) {
+        return;
+      }
+
+      const key = getReadingUnitKey(node);
+      if (!currentGroup || currentGroup.key !== key) {
+        currentGroup = { key, nodes: [] };
+        groupedNodes.push(currentGroup);
+      }
+
+      currentGroup.nodes.push(node);
+    });
+
+    return groupedNodes
+      .map((group) => buildLinearText(group.nodes, start))
+      .filter((unit) => unit.text.trim());
+  }
+
+  function getReadingUnitKey(node) {
+    return getHeaderContainer(node) || document.body;
+  }
+
+  function getHeaderContainer(node) {
+    let element = node.parentElement;
+    while (element && element !== document.body) {
+      if (HEADING_TAGS.has(element.tagName) || element.getAttribute("role") === "heading") {
+        return element;
+      }
+      if (element.tagName === "HEADER" && isSectionHeaderElement(element)) {
+        return element;
+      }
+      element = element.parentElement;
+    }
+
+    return null;
+  }
+
+  function isSectionHeaderElement(element) {
+    let parent = element.parentElement;
+    while (parent && parent !== document.body) {
+      if (SECTIONING_TAGS.has(parent.tagName)) {
+        return true;
+      }
+      parent = parent.parentElement;
+    }
+
+    return false;
   }
 
   function buildLinearText(textNodes, start) {
