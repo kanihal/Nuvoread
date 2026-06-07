@@ -11,6 +11,7 @@
   const DEFAULT_SPEED = 1.25;
   const SPEED_STORAGE_KEY = "mlxTtsSpeed";
   const SERVER_STORAGE_KEY = "mlxTtsServerBaseUrl";
+  const WORD_HIGHLIGHT_STORAGE_KEY = "mlxTtsWordHighlightEnabled";
   const SKIP_TAGS = new Set([
     "SCRIPT",
     "STYLE",
@@ -42,11 +43,13 @@
     activeWordIndex: -1,
     highlightFrame: null,
     speedPopoverOpen: false,
+    wordHighlightEnabled: false,
   };
 
   const elements = injectPlayer();
   document.addEventListener("selectionchange", rememberSelection);
   document.addEventListener("mousedown", handleDocumentMouseDown);
+  document.addEventListener("dblclick", handleDocumentDoubleClick);
   window.addEventListener("pagehide", () => clearAllHighlights());
   loadSettings();
   chrome?.storage?.onChanged?.addListener(handleStorageChange);
@@ -115,11 +118,13 @@
       {
         [SPEED_STORAGE_KEY]: DEFAULT_SPEED,
         [SERVER_STORAGE_KEY]: DEFAULT_SERVER_BASE_URL,
+        [WORD_HIGHLIGHT_STORAGE_KEY]: false,
       },
       (items) => {
         const saved = Number(items[SPEED_STORAGE_KEY]);
         setSpeed(Number.isFinite(saved) ? saved : DEFAULT_SPEED, false);
         state.serverBaseUrl = normalizeServerBaseUrl(items[SERVER_STORAGE_KEY]);
+        state.wordHighlightEnabled = Boolean(items[WORD_HIGHLIGHT_STORAGE_KEY]);
       }
     );
   }
@@ -135,6 +140,12 @@
       const nextSpeed = Number(changes[SPEED_STORAGE_KEY].newValue);
       if (nextSpeed !== state.speed) {
         setSpeed(nextSpeed, false);
+      }
+    }
+    if (changes[WORD_HIGHLIGHT_STORAGE_KEY]) {
+      state.wordHighlightEnabled = Boolean(changes[WORD_HIGHLIGHT_STORAGE_KEY].newValue);
+      if (!state.wordHighlightEnabled) {
+        clearWordHighlight();
       }
     }
   }
@@ -212,6 +223,39 @@
       return;
     }
     setSpeedPopover(false);
+  }
+
+  function handleDocumentDoubleClick(event) {
+    if (state.stopped || !state.playing || elements.root.contains(event.target)) {
+      return;
+    }
+
+    setTimeout(() => {
+      if (state.stopped || !state.playing || !hasReadablePageSelection()) {
+        return;
+      }
+
+      rememberSelection();
+      void playFromSelection();
+    }, 0);
+  }
+
+  function hasReadablePageSelection() {
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+      return false;
+    }
+
+    const range = selection.getRangeAt(0);
+    const container = range.commonAncestorContainer;
+    const element =
+      container.nodeType === Node.ELEMENT_NODE ? container : container.parentElement;
+    if (element && elements.root.contains(element)) {
+      return false;
+    }
+
+    const start = getStartPosition(range);
+    return Boolean(start && isReadableTextNode(start.node));
   }
 
   function setSpeedPopover(open) {
@@ -753,11 +797,16 @@
     }
 
     CSS.highlights.set(SENTENCE_HIGHLIGHT, new Highlight(sentence.range));
-    CSS.highlights.delete(WORD_HIGHLIGHT);
+    clearWordHighlight();
   }
 
   function updateWordHighlight(sentence, audio) {
-    if (!supportsCustomHighlights() || !sentence.words.length || !Number.isFinite(audio.duration)) {
+    if (
+      !state.wordHighlightEnabled ||
+      !supportsCustomHighlights() ||
+      !sentence.words.length ||
+      !Number.isFinite(audio.duration)
+    ) {
       return;
     }
 
@@ -779,6 +828,15 @@
     }
 
     CSS.highlights.delete(SENTENCE_HIGHLIGHT);
+    clearWordHighlight();
+  }
+
+  function clearWordHighlight() {
+    state.activeWordIndex = -1;
+    if (!supportsCustomHighlights()) {
+      return;
+    }
+
     CSS.highlights.delete(WORD_HIGHLIGHT);
   }
 

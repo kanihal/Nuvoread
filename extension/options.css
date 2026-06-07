@@ -63,12 +63,45 @@ p {
   font-weight: 650;
 }
 
+.toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 16px;
+  font-weight: 650;
+}
+
+.toggle input {
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+  accent-color: #4b67ff;
+}
+
+.toggle span {
+  display: grid;
+  gap: 2px;
+}
+
+.toggle small {
+  color: #626a78;
+  font-size: 13px;
+  font-weight: 400;
+}
+
 input {
   height: 42px;
   padding: 0 12px;
   border: 1px solid #ccd3df;
   border-radius: 8px;
   font: inherit;
+}
+
+.toggle input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border-radius: 4px;
 }
 
 input:focus {
