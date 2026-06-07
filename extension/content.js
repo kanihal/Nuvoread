@@ -792,6 +792,8 @@
   }
 
   function highlightSentence(sentence) {
+    scrollRangeIntoView(sentence.range, { alignToTop: true });
+
     if (!supportsCustomHighlights()) {
       return;
     }
@@ -844,8 +846,17 @@
     return Boolean(globalThis.CSS?.highlights && globalThis.Highlight);
   }
 
-  function scrollRangeIntoView(range) {
-    const rect = range.getBoundingClientRect();
+  function scrollRangeIntoView(range, options = {}) {
+    const rect = getRangeScrollRect(range);
+    if (!rect) {
+      return;
+    }
+
+    if (options.alignToTop) {
+      scrollRangeToTopIfNeeded(range, rect);
+      return;
+    }
+
     const margin = 80;
     const outsideViewport =
       rect.top < margin ||
@@ -859,5 +870,28 @@
 
     const container = range.startContainer.parentElement;
     container?.scrollIntoView({ block: "center", inline: "nearest", behavior: "smooth" });
+  }
+
+  function getRangeScrollRect(range) {
+    const firstRect = Array.from(range.getClientRects()).find(
+      (rect) => rect.width > 0 && rect.height > 0
+    );
+    const rect = firstRect || range.getBoundingClientRect();
+    return rect.width > 0 || rect.height > 0 ? rect : null;
+  }
+
+  function scrollRangeToTopIfNeeded(range, rect) {
+    const inViewport =
+      rect.top >= 0 &&
+      rect.bottom <= window.innerHeight &&
+      rect.left >= 0 &&
+      rect.right <= window.innerWidth;
+
+    if (inViewport) {
+      return;
+    }
+
+    const container = range.startContainer.parentElement;
+    container?.scrollIntoView({ block: "start", inline: "nearest", behavior: "smooth" });
   }
 })();
